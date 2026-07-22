@@ -32,8 +32,9 @@ jobs:
         docker run -i --rm $IMAGE_NAME:${{ github.sha }}-amd64 bash -lc '
           set -eu
           sdkmanager --version
-          build_tools_pkg="$(sdkmanager --list | grep -E "^build-tools;[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
-          platform_pkg="$(sdkmanager --list | grep -E "^platforms;android-[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          sdk_list="$(sdkmanager --list)"
+          build_tools_pkg="$(printf "%s\n" "$sdk_list" | awk -F"|" '/^[[:space:]]*build-tools;[0-9]+/{gsub(/[[:space:]]+/, "", $1); print $1}' | sort -V | tail -n1)"
+          platform_pkg="$(printf "%s\n" "$sdk_list" | awk -F"|" '/^[[:space:]]*platforms;android-[0-9]+/{gsub(/[[:space:]]+/, "", $1); print $1}' | sort -V | tail -n1)"
           if [ -z "$build_tools_pkg" ] || [ -z "$platform_pkg" ]; then
             echo "Unable to determine latest Android packages from sdkmanager --list" >&2
             exit 1
@@ -84,14 +85,19 @@ jobs:
       run: |
         docker run --rm $IMAGE_NAME:${{ github.sha }}-arm64 bash -lc '
           set -eu
-          sdkmanager --version
-          build_tools_pkg="$(sdkmanager --list | grep -E "^build-tools;[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
-          platform_pkg="$(sdkmanager --list | grep -E "^platforms;android-[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          sdkmanager_cmd="$ANDROID_HOME/cmdline-tools/tools/bin/sdkmanager"
+          if [ ! -x "$sdkmanager_cmd" ]; then
+            sdkmanager_cmd="sdkmanager"
+          fi
+          "$sdkmanager_cmd" --version
+          sdk_list="$("$sdkmanager_cmd" --list)"
+          build_tools_pkg="$(printf "%s\n" "$sdk_list" | awk -F"|" '/^[[:space:]]*build-tools;[0-9]+/{gsub(/[[:space:]]+/, "", $1); print $1}' | sort -V | tail -n1)"
+          platform_pkg="$(printf "%s\n" "$sdk_list" | awk -F"|" '/^[[:space:]]*platforms;android-[0-9]+/{gsub(/[[:space:]]+/, "", $1); print $1}' | sort -V | tail -n1)"
           if [ -z "$build_tools_pkg" ] || [ -z "$platform_pkg" ]; then
             echo "Unable to determine latest Android packages from sdkmanager --list" >&2
             exit 1
           fi
-          yes | sdkmanager "$build_tools_pkg" platform-tools "$platform_pkg"
+          yes | "$sdkmanager_cmd" "$build_tools_pkg" platform-tools "$platform_pkg"
           adb version
           aapt2 version
           platform_dir="${platform_pkg/;/\/}"
