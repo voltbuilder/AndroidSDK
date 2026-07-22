@@ -17,7 +17,16 @@ RUN apt-get update && \
     apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends openjdk-${JDK_VERSION}-jdk && \
     apt-get install -y --no-install-recommends git wget unzip && \
+    if [ "$(dpkg --print-architecture)" = "arm64" ]; then apt-get install -y --no-install-recommends box64; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN ln -s /usr/lib/jvm/java-${JDK_VERSION}-openjdk-$(dpkg --print-architecture) /usr/lib/jvm/java-${JDK_VERSION}-openjdk
+COPY box64-wrapper.sh /usr/local/lib/android-box64/wrap
+RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
+        chmod +x /usr/local/lib/android-box64/wrap && \
+        for tool_name in sdkmanager avdmanager adb emulator apkanalyzer lint aapt aapt2 aidl zipalign apksigner d8 dexdump retrace dmtracedump; do \
+            ln -sf /usr/local/lib/android-box64/wrap /usr/local/bin/$tool_name; \
+        done; \
+    fi
 
 # download and install Gradle
 # https://services.gradle.org/distributions/
@@ -48,7 +57,7 @@ RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
     rm *tools*linux*.zip
 
 # set the environment variables
-ENV JAVA_HOME=/usr/lib/jvm/java-${JDK_VERSION}-openjdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/java-${JDK_VERSION}-openjdk
 ENV GRADLE_HOME=/opt/gradle
 ENV KOTLIN_HOME=/opt/kotlinc
 ENV PATH=${PATH}:${GRADLE_HOME}/bin:${KOTLIN_HOME}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator

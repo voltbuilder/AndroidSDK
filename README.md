@@ -883,7 +883,12 @@ sudo netstat -tulpn | grep LISTEN
 
 * Go to the top-level directory of this project
 
-* Execute [`image-publisher.sh`](https://github.com/thyrlian/AndroidSDK/blob/master/image-publisher.sh) script
+* Create a version tag and push it to GitHub. GitHub Actions now publishes the main image to GHCR as `ghcr.io/voltbuilder/android-sdk`.
+
+  * `10.0` is the amd64 compatibility release line.
+  * `10.1` is the first arm64-capable multi-arch release line.
+
+* Execute [`image-publisher.sh`](https://github.com/thyrlian/AndroidSDK/blob/master/image-publisher.sh) only if you still need the legacy Docker Hub publishing flow
 
   ```console
   ./image-publisher.sh [TAG]

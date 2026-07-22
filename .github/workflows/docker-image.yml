@@ -3,24 +3,117 @@ name: CI
 on:
   push:
     branches: [ master ]
+    tags: [ '[0-9]*.[0-9]*' ]
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/voltbuilder/android-sdk
+
+# Workflow model:
+# - build-* jobs always run on PRs and pushes to validate native amd64/arm64 builds.
+# - publish actions (login/push/manifest) are gated to tag pushes only.
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-amd64:
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - name: Build the main Docker image (android-sdk)
-      run: docker build -t android-sdk ./android-sdk
-    - name: Display tool version information of the main Docker image (android-sdk)
-      run: cmd=$(cat ./android-sdk/version-inspector.sh) && docker run -i --rm android-sdk bash -c "$cmd"
+    - name: Build the main Docker image (android-sdk, amd64)
+      run: docker build --no-cache -t $IMAGE_NAME:${{ github.sha }}-amd64 ./android-sdk
+    - name: Display tool version information (android-sdk, amd64)
+      run: cmd=$(cat ./android-sdk/version-inspector.sh) && docker run -i --rm $IMAGE_NAME:${{ github.sha }}-amd64 bash -c "$cmd"
     - name: Build the sub Docker image (android-sdk-vnc)
+      if: github.ref_type != 'tag'
       run: docker build -t android-sdk-vnc ./android-sdk/vnc
     - name: Display tool version information of the sub Docker image (android-sdk-vnc)
+      if: github.ref_type != 'tag'
       run: cmd=$(cat ./android-sdk/vnc/version-inspector.sh) && docker run -i --rm android-sdk-vnc bash -c "$cmd"
     - name: Build the sub Docker image (android-sdk-firebase-test-lab)
+      if: github.ref_type != 'tag'
       run: docker build -t android-sdk-firebase-test-lab ./android-sdk/firebase-test-lab
     - name: Display tool version information of the sub Docker image (android-sdk-firebase-test-lab)
+      if: github.ref_type != 'tag'
       run: cmd=$(cat ./android-sdk/firebase-test-lab/version-inspector.sh) && docker run -i --rm android-sdk-firebase-test-lab bash -c "$cmd"
+    - name: Login to GHCR
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Tag amd64 image for release
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      run: docker tag $IMAGE_NAME:${{ github.sha }}-amd64 $IMAGE_NAME:${{ github.ref_name }}-amd64
+    - name: Push the amd64 Docker image (android-sdk)
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      run: docker push $IMAGE_NAME:${{ github.ref_name }}-amd64
+
+  build-arm64:
+    if: github.event_name != 'push' || github.ref_type != 'tag' || github.ref_name != '10.0'
+    runs-on: ubuntu-24.04-arm
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Build the main Docker image (android-sdk, arm64)
+      run: docker build --no-cache -t $IMAGE_NAME:${{ github.sha }}-arm64 ./android-sdk
+    - name: Display tool version information (android-sdk, arm64)
+      run: cmd=$(cat ./android-sdk/version-inspector.sh) && docker run --rm $IMAGE_NAME:${{ github.sha }}-arm64 bash -c "$cmd"
+    - name: Login to GHCR
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Tag arm64 image for release
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      run: docker tag $IMAGE_NAME:${{ github.sha }}-arm64 $IMAGE_NAME:${{ github.ref_name }}-arm64
+    - name: Push the arm64 Docker image (android-sdk)
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      run: docker push $IMAGE_NAME:${{ github.ref_name }}-arm64
+
+  manifest-10_0:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name == '10.0'
+    needs: [build-amd64]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Publish the 10.0 manifest
+      run: |
+        docker buildx imagetools create \
+          -t $IMAGE_NAME:10.0 \
+          -t $IMAGE_NAME:latest \
+          $IMAGE_NAME:10.0-amd64
+
+  manifest-release:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name != '10.0'
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Publish the multi-arch manifest
+      run: |
+        docker buildx imagetools create \
+          -t $IMAGE_NAME:${{ github.ref_name }} \
+          -t $IMAGE_NAME:latest \
+          $IMAGE_NAME:${{ github.ref_name }}-amd64 \
+          $IMAGE_NAME:${{ github.ref_name }}-arm64
