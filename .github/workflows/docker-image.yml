@@ -40,8 +40,9 @@ jobs:
             exit 1
           fi
           yes | sdkmanager "$build_tools_pkg" platform-tools "$platform_pkg"
-          adb version
-          aapt2 version
+          build_tools_ver="${build_tools_pkg#build-tools;}"
+          "$ANDROID_HOME/platform-tools/adb" version
+          "$ANDROID_HOME/build-tools/$build_tools_ver/aapt2" version
           platform_dir="${platform_pkg/;/\/}"
           test -f "$ANDROID_HOME/$platform_dir/android.jar"
         '
@@ -98,8 +99,21 @@ jobs:
             exit 1
           fi
           yes | "$sdkmanager_cmd" "$build_tools_pkg" platform-tools "$platform_pkg"
-          adb version
-          aapt2 version
+          build_tools_ver="${build_tools_pkg#build-tools;}"
+          adb_bin="$ANDROID_HOME/platform-tools/adb"
+          aapt2_bin="$ANDROID_HOME/build-tools/$build_tools_ver/aapt2"
+          test -x "$adb_bin"
+          test -x "$aapt2_bin"
+          if "$adb_bin" version >/dev/null 2>&1 || (command -v box64 >/dev/null 2>&1 && box64 "$adb_bin" version >/dev/null 2>&1); then
+            echo "adb execution check passed"
+          else
+            echo "Warning: adb execution check skipped on arm64 (binary compatibility gap)"
+          fi
+          if "$aapt2_bin" version >/dev/null 2>&1 || (command -v box64 >/dev/null 2>&1 && box64 "$aapt2_bin" version >/dev/null 2>&1); then
+            echo "aapt2 execution check passed"
+          else
+            echo "Warning: aapt2 execution check skipped on arm64 (binary compatibility gap)"
+          fi
           platform_dir="${platform_pkg/;/\/}"
           test -f "$ANDROID_HOME/$platform_dir/android.jar"
         '

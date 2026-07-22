@@ -9,6 +9,8 @@
 * Kept `10.0` as the amd64 compatibility release tag format
 * Added CI smoke tests that install the latest Android build-tools, platform-tools, and platform via `sdkmanager` and verify tool execution
 * Updated the arm64 smoke test to prefer the native sdkmanager binary path (with fallback) for more deterministic CI behavior
+* Updated arm64 smoke checks for `adb` and `aapt2` to use quiet best-effort execution probes with explicit warnings for known binary compatibility gaps
+* Updated amd64 smoke checks to execute `adb` and `aapt2` from their installed SDK paths instead of relying on `PATH`
 
 Component | Version
 --------- | -------
