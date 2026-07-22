@@ -7,6 +7,7 @@
 * Added GHCR publishing for the main Android SDK image via GitHub Actions
 * Added a native arm64 build path for the main image and reserved `10.1` for the first arm64-capable release line
 * Kept `10.0` as the amd64 compatibility release tag format
+* Added CI smoke tests that install the latest Android build-tools, platform-tools, and platform via `sdkmanager` and verify tool execution
 
 Component | Version
 --------- | -------

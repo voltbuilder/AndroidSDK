@@ -27,6 +27,23 @@ jobs:
       run: docker build --no-cache -t $IMAGE_NAME:${{ github.sha }}-amd64 ./android-sdk
     - name: Display tool version information (android-sdk, amd64)
       run: cmd=$(cat ./android-sdk/version-inspector.sh) && docker run -i --rm $IMAGE_NAME:${{ github.sha }}-amd64 bash -c "$cmd"
+    - name: Smoke test sdkmanager installs (android-sdk, amd64)
+      run: |
+        docker run -i --rm $IMAGE_NAME:${{ github.sha }}-amd64 bash -lc '
+          set -eu
+          sdkmanager --version
+          build_tools_pkg="$(sdkmanager --list | grep -E "^build-tools;[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          platform_pkg="$(sdkmanager --list | grep -E "^platforms;android-[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          if [ -z "$build_tools_pkg" ] || [ -z "$platform_pkg" ]; then
+            echo "Unable to determine latest Android packages from sdkmanager --list" >&2
+            exit 1
+          fi
+          yes | sdkmanager "$build_tools_pkg" platform-tools "$platform_pkg"
+          adb version
+          aapt2 version
+          platform_dir="${platform_pkg/;/\/}"
+          test -f "$ANDROID_HOME/$platform_dir/android.jar"
+        '
     - name: Build the sub Docker image (android-sdk-vnc)
       if: github.ref_type != 'tag'
       run: docker build -t android-sdk-vnc ./android-sdk/vnc
@@ -63,6 +80,23 @@ jobs:
       run: docker build --no-cache -t $IMAGE_NAME:${{ github.sha }}-arm64 ./android-sdk
     - name: Display tool version information (android-sdk, arm64)
       run: cmd=$(cat ./android-sdk/version-inspector.sh) && docker run --rm $IMAGE_NAME:${{ github.sha }}-arm64 bash -c "$cmd"
+    - name: Smoke test sdkmanager installs (android-sdk, arm64)
+      run: |
+        docker run --rm $IMAGE_NAME:${{ github.sha }}-arm64 bash -lc '
+          set -eu
+          sdkmanager --version
+          build_tools_pkg="$(sdkmanager --list | grep -E "^build-tools;[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          platform_pkg="$(sdkmanager --list | grep -E "^platforms;android-[0-9]+" | cut -d"|" -f1 | tr -d " " | sort -V | tail -n1)"
+          if [ -z "$build_tools_pkg" ] || [ -z "$platform_pkg" ]; then
+            echo "Unable to determine latest Android packages from sdkmanager --list" >&2
+            exit 1
+          fi
+          yes | sdkmanager "$build_tools_pkg" platform-tools "$platform_pkg"
+          adb version
+          aapt2 version
+          platform_dir="${platform_pkg/;/\/}"
+          test -f "$ANDROID_HOME/$platform_dir/android.jar"
+        '
     - name: Login to GHCR
       if: github.event_name == 'push' && github.ref_type == 'tag'
       uses: docker/login-action@v3
